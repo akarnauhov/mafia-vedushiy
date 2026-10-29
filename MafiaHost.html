@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Мафия — пульт координатора (квест)</title>
+  <style>
+    :root {
+      --bg: #14110f;
+      --panel: #1c1916;
+      --line: #3a322c;
+      --text: #f2ebe3;
+      --muted: #a8998c;
+      --accent: #e8a05a;
+      --ok: #6dcf9a;
+      --warn: #e6c35c;
+      --bad: #e86a5a;
+      --btn: #2a241f;
+      --room: #252019;
+      --room-out: #2a1816;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Segoe UI", Arial, sans-serif;
+      background:
+        radial-gradient(900px 500px at 0% -10%, #2a1c14 0%, transparent 55%),
+        var(--bg);
+      color: var(--text); min-height: 100vh; font-size: 16px; line-height: 1.4;
+    }
+    header {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      justify-content: space-between; padding: 14px 18px;
+      border-bottom: 1px solid var(--line); background: #18140f;
+    }
+    header h1 { margin: 0; font-size: 1.1rem; }
+    header h1 span { color: var(--accent); }
+    .badge {
+      font-size: .82rem; color: #f0d4b0; background: #2a2018;
+      border: 1px solid #5a4030; padding: 6px 10px; border-radius: 8px;
+    }
+    main { padding: 16px 18px 40px; max-width: 1180px; margin: 0 auto; }
+    .hint { color: var(--muted); font-size: .86rem; margin: 4px 0 10px; }
+    .err { color: var(--bad); font-size: .92rem; margin: 8px 0; min-height: 1.2em; }
+    .card {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 12px; padding: 16px 18px; margin-bottom: 14px;
+    }
+    .card h2 { margin: 0 0 8px; font-size: 1.05rem; }
+    label { display: block; margin: 10px 0 4px; font-weight: 600; }
+    input[type=text], input[type=number], select {
+      width: 100%; padding: 10px 12px; border-radius: 8px;
+      border: 1px solid var(--line); background: #120f0c; color: var(--text);
+      font: inherit;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+    .row > * { flex: 1; min-width: 130px; }
+    .btn {
+      border: 1px solid var(--line); background: var(--btn); color: var(--text);
+      padding: 11px 16px; border-radius: 8px; font: inherit; cursor: pointer; font-weight: 600;
+    }
+    .btn:hover { border-color: var(--accent); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-accent { background: #3a2a18; border-color: #7a5a30; color: #ffd9a8; }
+    .btn-ok { background: #1c3a2c; border-color: #2f6b4c; color: #b8f0d0; }
+    .btn-bad { background: #3a1c1c; border-color: #7a3030; color: #ffc9c9; }
+    .btn-warn { background: #3a3218; border-color: #7a6a28; color: #ffe9a8; }
+    .btn-sm { padding: 7px 10px; font-size: .9rem; }
+    .checks { display: flex; flex-wrap: wrap; gap: 12px 20px; margin: 12px 0; }
+    .checks label { font-weight: 500; display: flex; gap: 8px; align-items: center; margin: 0; }
+    .grid2 { display: grid; grid-template-columns: 1.45fr 1fr; gap: 14px; }
+    @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+    .board {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+      gap: 8px; margin: 10px 0 14px;
+    }
+    .tile {
+      border: 1px solid var(--line); border-radius: 10px; padding: 12px 8px;
+      text-align: center; background: var(--room); min-height: 72px;
+      display: flex; flex-direction: column; justify-content: center; gap: 4px;
+    }
+    .tile strong { font-size: 1.25rem; }
+    .tile small { color: var(--muted); font-size: .75rem; }
+    .tile.alive { border-color: #4a6a48; }
+    .tile.out { background: var(--room-out); border-color: #6a3030; opacity: .75; }
+    .tile.out strong { text-decoration: line-through; color: #c99; }
+    .actions-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+    .action-row {
+      display: grid; grid-template-columns: 1.1fr 1fr 1fr auto; gap: 8px;
+      align-items: center; padding: 8px; border: 1px solid var(--line);
+      border-radius: 8px; background: #15120f;
+    }
+    .phase {
+      padding: 12px 14px; border-radius: 10px; font-weight: 700; margin-bottom: 12px;
+      border: 1px solid var(--line);
+    }
+    .phase.play { background: #242018; }
+    .phase.warn { background: #3a3218; border-color: #7a6a28; color: #ffe9a8; }
+    .phase.mafia { background: #3a1c1c; border-color: #7a3030; color: #ffc9c9; }
+    .phase.town { background: #1c3a2c; border-color: #2f6b4c; color: #b8f0d0; }
+    .result-box {
+      margin: 12px 0; padding: 14px; border-radius: 10px; background: #15120f;
+      border: 1px solid var(--accent); font-size: 1.12rem; font-weight: 700; min-height: 52px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; }
+    th { color: var(--muted); font-weight: 500; }
+    .log {
+      max-height: 160px; overflow: auto; background: #120f0c; border: 1px solid var(--line);
+      border-radius: 8px; padding: 10px; font-family: Consolas, monospace; font-size: .8rem;
+      white-space: pre-wrap;
+    }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .rooms { display: flex; flex-direction: column; gap: 6px; }
+    .room-line { display: flex; gap: 8px; align-items: center; }
+    .room-line input { max-width: 140px; }
+    .hidden { display: none !important; }
+    .banner {
+      position: fixed; inset: 0; background: rgba(0,0,0,.75); display: flex;
+      align-items: center; justify-content: center; z-index: 50; padding: 20px;
+    }
+    .banner .inner {
+      background: var(--panel); border: 2px solid var(--line); border-radius: 14px;
+      padding: 24px; max-width: 520px; width: 100%; text-align: center;
+    }
+    .banner h2 { margin: 0 0 12px; font-size: 1.55rem; }
+    details.help { margin-top: 8px; color: var(--muted); }
+    details.help summary { cursor: pointer; color: var(--accent); }
+    .callout {
+      border: 1px solid #5a4030; background: #241a14; color: #f0d4b0;
+      border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; font-size: .92rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Мафия <span>пульт координатора</span></h1>
+    <div class="badge">Живой квест · игроки в программу не заходят</div>
+    <div class="toolbar" id="topBar"></div>
+  </header>
+  <main>
+    <section id="screenStart" class="card"></section>
+    <section id="screenGame" class="hidden"></section>
+  </main>
+  <div id="banner" class="banner hidden"></div>
+
+<script>
+(function () {
+  const ACTION_LABEL = { mafia: "Ударила / убрала", doctor: "Успел защитить", cop: "Проверил" };
+  const ROLE_LABEL = { mafia: "Мафия", doctor: "Доктор", cop: "Комиссар" };
+  let state = null;
+
+  function el(tag, attrs, ...kids) {
+    const n = document.createElement(tag);
+    if (attrs) for (const [k, v] of Object.entries(attrs)) {
+      if (k === "className") n.className = v;
+      else if (k === "text") n.textContent = v;
+      else if (k === "html") n.innerHTML = v;
+      else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2).toLowerCase(), v);
+      else if (v === false || v == null) {}
+      else n.setAttribute(k, v === true ? "" : v);
+    }
+    for (const c of kids.flat()) {
+      if (c == null || c === false) continue;
+      n.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    }
+    return n;
+  }
+
+  function aliveRooms() { return state.rooms.filter((r) => state.alive.includes(r)); }
+  function log(line) {
+    const t = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    state.log.unshift(`[${t}] ${line}`);
+  }
+  function pushElim(night, reason, room, comment) {
+    state.eliminations.unshift({ night, reason, room, comment: comment || "" });
+  }
+  function removeAlive(room) { state.alive = state.alive.filter((r) => r !== room); }
+  function restoreAlive(room) {
+    if (!state.rooms.includes(room)) return;
+    if (!state.alive.includes(room)) {
+      state.alive.push(room);
+      state.alive.sort((a, b) => a - b);
+    }
+  }
+
+  function tracksMafia() {
+    return !!(state.rolesAssigned || state.askMafiaOnElim);
+  }
+
+  const ROLE_SHORT = { town: "мирный", mafia: "мафия", doctor: "доктор", cop: "комиссар" };
+
+  function resolveWasMafia(room) {
+    if (state.rolesAssigned && state.roles && state.roles[room]) {
+      return state.roles[room] === "mafia";
+    }
+    if (state.askMafiaOnElim) return askWasMafia(room);
+    return null;
+  }
+
+  function computePhase() {
+    if (state.winner === "mafia") return { key: "mafia", text: "Мафия победила" };
+    if (state.winner === "town") return { key: "town", text: "Мирные победили" };
+    if (tracksMafia()) {
+      const m = state.mafiaAlive;
+      const t = state.alive.length - m;
+      if (m <= 0) return { key: "town", text: "Мирные победили" };
+      if (m >= t) return { key: "mafia", text: "Мафия победила" };
+      const afterT = t - 1;
+      if (afterT >= 0 && (m >= afterT || (m === 1 && afterT === 1))) {
+        return { key: "warn", text: "Дальше — решающий момент" };
+      }
+      return { key: "play", text: "Вечер идёт" };
+    }
+    if (state.alive.length <= 2 * state.mafiaStart + 1) {
+      return { key: "warn", text: "Дальше — решающий момент (оценка)" };
+    }
+    return { key: "play", text: "Вечер идёт" };
+  }
+
+  function applyAutoWin(phase) {
+    if (!tracksMafia()) return;
+    if (phase.key === "mafia") state.winner = "mafia";
+    if (phase.key === "town") state.winner = "town";
+  }
+
+  /* ---- START ---- */
+  function renderStart() {
+    const root = document.getElementById("screenStart");
+    document.getElementById("screenGame").classList.add("hidden");
+    document.getElementById("banner").classList.add("hidden");
+    root.classList.remove("hidden");
+    document.getElementById("topBar").innerHTML = "";
+    root.innerHTML = "";
+
+    const rooms = [1, 2, 3, 4, 5, 6];
+    root.append(
+      el("div", { className: "callout", html: "<strong>Это пульт для координатора квеста.</strong> Люди играют вживую по комнатам. В программу заходишь только ты — зафиксировать ночь, голосование и не сбиться в счёте." }),
+      el("h2", { text: "Перед стартом вечера" }),
+      el("p", { className: "hint", text: "Заведи занятые комнаты на этаже. Пустые номера не вноси." })
+    );
+
+    const err = el("div", { className: "err", id: "startErr" });
+    const players = el("input", { type: "number", min: "3", value: "6", id: "inpPlayers" });
+    const mafiaN = el("select", { id: "inpMafia" },
+      el("option", { value: "1", text: "1 мафия" }),
+      el("option", { value: "2", text: "2 мафии", selected: true })
+    );
+    const roomsBox = el("div", { className: "rooms", id: "roomsBox" });
+    function addRoomRow(val) {
+      const inp = el("input", { type: "number", min: "1", value: val != null ? String(val) : "" });
+      const line = el("div", { className: "room-line" },
+        inp,
+        el("button", { className: "btn btn-sm", type: "button", text: "×", onClick: () => line.remove() })
+      );
+      roomsBox.appendChild(line);
+    }
+    rooms.forEach(addRoomRow);
+
+    const chkDoc = el("input", { type: "checkbox", checked: true });
+    const chkCop = el("input", { type: "checkbox", checked: true });
+    const chkAssign = el("input", { type: "checkbox" });
+    const chkAsk = el("input", { type: "checkbox" });
+    const orderSel = el("select", {},
+      el("option", { value: "free", text: "Свободный: голосование когда угодно", selected: true }),
+      el("option", { value: "strict", text: "Строгий: сначала посчитать ночь, потом голосование" })
+    );
+    const assignBox = el("div", { className: "hidden", id: "assignBox" });
+
+    function readRooms() {
+      return [...roomsBox.querySelectorAll("input")].map((i) => parseInt(i.value, 10)).filter((n) => !Number.isNaN(n));
+    }
+
+    function roleOptions(selected) {
+      const opts = [
+        el("option", { value: "town", text: "Мирный", selected: selected === "town" || !selected }),
+        el("option", { value: "mafia", text: "Мафия", selected: selected === "mafia" }),
+      ];
+      if (chkDoc.checked) opts.push(el("option", { value: "doctor", text: "Доктор", selected: selected === "doctor" }));
+      if (chkCop.checked) opts.push(el("option", { value: "cop", text: "Комиссар", selected: selected === "cop" }));
+      return opts;
+    }
+
+    function rebuildAssign() {
+      assignBox.innerHTML = "";
+      if (!chkAssign.checked) {
+        assignBox.classList.add("hidden");
+        return;
+      }
+      assignBox.classList.remove("hidden");
+      const list = readRooms();
+      if (!list.length) {
+        assignBox.append(el("p", { className: "hint", text: "Сначала добавь занятые комнаты — здесь появятся роли." }));
+        return;
+      }
+      assignBox.append(
+        el("h2", { text: "Роли по комнатам (только тебе)" }),
+        el("p", { className: "hint", text: "Опционально. Отметь, кого куда посадили после раздачи. Игрокам экран не показывай." })
+      );
+      const wrap = el("div", { className: "rooms" });
+      list.forEach((r) => {
+        const sel = el("select", { "data-room": String(r) }, ...roleOptions("town"));
+        wrap.append(el("div", { className: "room-line" },
+          el("strong", { text: `№${r}`, style: "min-width:48px" }),
+          sel
+        ));
+      });
+      assignBox.append(wrap);
+      assignBox.append(el("div", { className: "toolbar" },
+        el("button", {
+          className: "btn btn-sm", type: "button", text: "Случайно раздать",
+          onClick: () => randomAssign(list),
+        })
+      ));
+      el("p", { className: "hint", text: "Случайно: ровно столько мафий, сколько выбрано; доктор/комиссар — по одному, если включены." });
+      // append hint after toolbar
+      assignBox.append(el("p", { className: "hint", text: "«Случайно» ставит нужное число мафий и по одному доктору/комиссару, если они есть в прогоне." }));
+    }
+
+    function randomAssign(list) {
+      const m = parseInt(mafiaN.value, 10);
+      const pool = [...list];
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      const map = {};
+      pool.forEach((r) => { map[r] = "town"; });
+      let i = 0;
+      for (let k = 0; k < m && i < pool.length; k++, i++) map[pool[i]] = "mafia";
+      if (chkDoc.checked && i < pool.length) { map[pool[i]] = "doctor"; i++; }
+      if (chkCop.checked && i < pool.length) { map[pool[i]] = "cop"; i++; }
+      assignBox.querySelectorAll("select[data-room]").forEach((sel) => {
+        const r = parseInt(sel.getAttribute("data-room"), 10);
+        sel.innerHTML = "";
+        roleOptions(map[r]).forEach((o) => sel.appendChild(o));
+      });
+    }
+
+    function readRoles(roomsList) {
+      if (!chkAssign.checked) return null;
+      const roles = {};
+      assignBox.querySelectorAll("select[data-room]").forEach((sel) => {
+        roles[parseInt(sel.getAttribute("data-room"), 10)] = sel.value;
+      });
+      // ensure all rooms present
+      roomsList.forEach((r) => { if (!roles[r]) roles[r] = "town"; });
+      return roles;
+    }
+
+    chkAssign.addEventListener("change", rebuildAssign);
+    chkDoc.addEventListener("change", () => { if (chkAssign.checked) rebuildAssign(); });
+    chkCop.addEventListener("change", () => { if (chkAssign.checked) rebuildAssign(); });
+    roomsBox.addEventListener("change", () => { if (chkAssign.checked) rebuildAssign(); });
+    roomsBox.addEventListener("input", () => { if (chkAssign.checked) rebuildAssign(); });
+    mafiaN.addEventListener("change", () => { if (chkAssign.checked) rebuildAssign(); });
+
+    root.append(
+      el("label", { text: "Сколько человек в прогоне (ориентир)" }),
+      players,
+      el("p", { className: "hint", text: "Для себя. Главное — список занятых комнат ниже." }),
+      el("label", { text: "Занятые комнаты на площадке" }),
+      roomsBox,
+      el("button", {
+        className: "btn btn-sm", type: "button", text: "+ комната",
+        onClick: () => { addRoomRow(""); if (chkAssign.checked) rebuildAssign(); },
+      }),
+      el("p", { className: "hint", text: "Тыкай «+», впиши номер двери/комнаты. Пропуски норм (1, 2, 5). Пустые не добавляй." }),
+      el("label", { text: "Сколько мафий в этом прогоне" }),
+      mafiaN,
+      el("div", { className: "checks" },
+        el("label", {}, chkDoc, " Есть доктор"),
+        el("label", {}, chkCop, " Есть комиссар"),
+        el("label", {}, chkAssign, " Назначить роли комнатам сейчас (опционально)"),
+        el("label", {}, chkAsk, " Спрашивать при выбывании, если роль неизвестна")
+      ),
+      el("p", { className: "hint", text: "Галочка «Назначить роли» — разнесёшь мафию/доктора/комиссара по номерам. Без неё вечер тоже стартует." }),
+      assignBox,
+      el("label", { text: "Порядок отметок" }),
+      orderSel,
+      el("p", { className: "hint", text: "Строгий режим не даст отметить голосование, пока не посчитал ночь." }),
+      err,
+      el("div", { className: "toolbar" },
+        el("button", { className: "btn btn-accent", type: "button", text: "Начать вечер", onClick: startGame }),
+        el("button", { className: "btn", type: "button", text: "Загрузить сохранение…", onClick: () => loadFromFile() })
+      ),
+      el("details", { className: "help" },
+        el("summary", { text: "Как вести вечер с пультом" }),
+        el("p", { html: "1) (Опционально) разнеси роли по комнатам<br>2) Игроки ушли по комнатам — ночь вживую<br>3) Узнал итог → отметки → «Посчитать ночь»<br>4) Голосование вживую → отметить выбытие<br>5) «Следующая ночь» / сохранить на перерыв" })
+      )
+    );
+
+    function startGame() {
+      err.textContent = "";
+      const p = parseInt(players.value, 10);
+      const roomsList = readRooms();
+      const m = parseInt(mafiaN.value, 10);
+      if (!p || p < 3) { err.textContent = "Слишком мало человек (минимум 3)"; return; }
+      if (!roomsList.length) { err.textContent = "Добавь хотя бы одну занятую комнату"; return; }
+      if (roomsList.length < p) { err.textContent = "Комнат меньше, чем людей — добавь занятые номера"; return; }
+      const uniq = new Set(roomsList);
+      if (uniq.size !== roomsList.length) {
+        const dup = roomsList.find((r, i) => roomsList.indexOf(r) !== i);
+        err.textContent = `Комната №${dup} указана дважды`; return;
+      }
+      if (m >= p) { err.textContent = "Мафий слишком много для такого прогона"; return; }
+      if (m > p / 2 && !confirm("Мафий многовато. Всё равно начать?")) return;
+
+      let roles = null;
+      if (chkAssign.checked) {
+        if (assignBox.classList.contains("hidden") || !assignBox.querySelector("select")) rebuildAssign();
+        roles = readRoles(roomsList);
+        const mafiaRooms = Object.entries(roles).filter(([, v]) => v === "mafia").map(([k]) => +k);
+        const docs = Object.entries(roles).filter(([, v]) => v === "doctor");
+        const cops = Object.entries(roles).filter(([, v]) => v === "cop");
+        if (mafiaRooms.length !== m) {
+          err.textContent = `Нужно ровно ${m} мафий, сейчас отмечено: ${mafiaRooms.length}`;
+          return;
+        }
+        if (chkDoc.checked && docs.length > 1) { err.textContent = "Доктор может быть только в одной комнате"; return; }
+        if (chkDoc.checked && docs.length === 0 && !confirm("Доктор включён, но никому не назначен. Начать так?")) return;
+        if (!chkDoc.checked && docs.length) { err.textContent = "Сними роль «Доктор» или включи галочку «Есть доктор»"; return; }
+        if (chkCop.checked && cops.length > 1) { err.textContent = "Комиссар может быть только в одной комнате"; return; }
+        if (chkCop.checked && cops.length === 0 && !confirm("Комиссар включён, но никому не назначен. Начать так?")) return;
+        if (!chkCop.checked && cops.length) { err.textContent = "Сними роль «Комиссар» или включи галочку «Есть комиссар»"; return; }
+      }
+
+      const sorted = [...roomsList].sort((a, b) => a - b);
+      state = {
+        version: 3,
+        mode: "live-quest",
+        playersHint: p,
+        rooms: sorted,
+        alive: [...sorted],
+        mafiaStart: m,
+        mafiaAlive: m,
+        hasDoctor: chkDoc.checked,
+        hasCop: chkCop.checked,
+        rolesAssigned: !!roles,
+        roles: roles, // room -> town|mafia|doctor|cop
+        askMafiaOnElim: chkAsk.checked,
+        orderMode: orderSel.value,
+        night: 1,
+        nightActions: [],
+        nightResolved: false,
+        nightResultText: "",
+        nightKillRoom: null,
+        eliminations: [],
+        log: [],
+        winner: null,
+        undoStack: [],
+      };
+      const roleLog = roles
+        ? Object.entries(roles).map(([r, v]) => `№${r}=${v}`).join(", ")
+        : "роли не назначали";
+      log(`[Старт вечера] комнат=${state.rooms.join(",")} мафий=${m} ${roleLog}`);
+      renderGame();
+    }
+  }
+
+  /* ---- GAME ---- */
+  function renderGame() {
+    const root = document.getElementById("screenGame");
+    document.getElementById("screenStart").classList.add("hidden");
+    root.classList.remove("hidden");
+    root.innerHTML = "";
+
+    let phase = computePhase();
+    applyAutoWin(phase);
+    phase = computePhase();
+    if (state.winner) showBanner(state.winner);
+
+    const top = document.getElementById("topBar");
+    top.innerHTML = "";
+    top.append(
+      el("button", { className: "btn btn-sm", text: "Сохранить", onClick: saveGame }),
+      el("button", { className: "btn btn-sm", text: "Загрузить…", onClick: () => { if (confirm("Заменить текущий вечер загрузкой?")) loadFromFile(); } }),
+      el("button", { className: "btn btn-sm", text: "Копировать лог", onClick: copyLog }),
+      el("button", { className: "btn btn-sm", text: "Новый вечер", onClick: () => { if (confirm("Сбросить вечер?")) { state = null; renderStart(); } } })
+    );
+
+    const left = el("div");
+    const right = el("div");
+
+    // Room board
+    left.append(el("div", { className: "card" },
+      el("h2", { text: `Ночь ${state.night} · табло комнат` }),
+      el("p", { className: "hint", text: "Зелёная рамка — ещё в игре. Зачёркнутая — выбыла. Это карта площадки для тебя." }),
+      el("div", { className: "board" },
+        ...state.rooms.map((r) => {
+          const alive = state.alive.includes(r);
+          const role = state.rolesAssigned && state.roles ? state.roles[r] : null;
+          return el("div", { className: "tile " + (alive ? "alive" : "out") },
+            el("strong", { text: "№" + r }),
+            el("small", { text: alive ? "в игре" : "вне игры" }),
+            role ? el("small", { text: ROLE_SHORT[role] || role, style: role === "mafia" ? "color:#e86a5a" : "" }) : null
+          );
+        })
+      )
+    ));
+
+    // Night notes
+    left.append(el("div", { className: "card" },
+      el("h2", { text: "Что произошло ночью (вживую)" }),
+      el("p", { className: "hint", text: "Ночь уже отыграли на этаже. Ты только фиксируешь факт: кого били / лечили / проверяли." }),
+      buildActionComposer(),
+      el("div", { className: "actions-list", id: "actList" }),
+      el("div", { className: "result-box", id: "nightResult", text: state.nightResultText || "После «Посчитать ночь» здесь текст, который можно озвучить." }),
+      el("div", { className: "err", id: "nightErr" }),
+      el("div", { className: "toolbar" },
+        el("button", { className: "btn btn-accent", text: "Посчитать ночь", disabled: !!state.winner, onClick: resolveNight }),
+        el("button", { className: "btn btn-ok", text: "Закрыть ночь → следующая", disabled: !!state.winner, onClick: nextNight })
+      ),
+      el("p", { className: "hint", text: "«Посчитать» — кто выбыл ночью. «Следующая» — только после подсчёта, сброс действий, Ночь+1." })
+    ));
+
+    const voteDisabled = state.orderMode === "strict" && !state.nightResolved;
+    left.append(el("div", { className: "card" },
+      el("h2", { text: "Общий сбор · голосование" }),
+      el("p", { className: "hint", text: voteDisabled
+        ? "Строгий режим: сначала «Посчитать ночь», или переключи порядок справа на «Свободный»."
+        : "Голосование прошло вживую — отметь комнату, которую выгнали. Она пропадёт с табло." }),
+      el("div", { className: "row" },
+        el("div", {},
+          el("label", { text: "Выгнали комнату" }),
+          el("select", { id: "voteRoom", disabled: voteDisabled || !!state.winner },
+            el("option", { value: "", text: "— номер —" }),
+            ...aliveRooms().map((r) => el("option", { value: String(r), text: `№${r}` }))
+          )
+        ),
+        el("div", {},
+          el("label", { text: "\u00a0" }),
+          el("button", {
+            className: "btn btn-warn", text: "Отметить выбытие",
+            disabled: voteDisabled || !!state.winner, onClick: fixVote,
+          })
+        )
+      ),
+      el("div", { className: "toolbar" },
+        el("button", { className: "btn btn-sm", text: "Отменить последнее голосование", onClick: undoElim }),
+        !tracksMafia() && el("button", { className: "btn btn-sm btn-ok", text: "Мирные победили", onClick: () => manualWin("town") }),
+        !tracksMafia() && el("button", { className: "btn btn-sm btn-bad", text: "Мафия победила", onClick: () => manualWin("mafia") })
+      ),
+      el("div", { className: "err", id: "voteErr" })
+    ));
+
+    const mCount = tracksMafia() ? state.mafiaAlive : null;
+    const tCount = mCount == null ? null : state.alive.length - mCount;
+    right.append(el("div", { className: "card" },
+      el("h2", { text: "Сводка для координатора" }),
+      el("div", { className: `phase ${phase.key}`, text: phase.text }),
+      el("p", { html: `<strong>Ночь:</strong> ${state.night}` }),
+      el("p", { html: `<strong>Комнат в игре:</strong> ${state.alive.length} из ${state.rooms.length}` }),
+      tracksMafia()
+        ? el("p", { html: `<strong>Состав:</strong> мирные ${tCount} · мафия ${mCount}` })
+        : el("p", { html: `<strong>Мафий на старте:</strong> ${state.mafiaStart} (роли по комнатам не задавали)` }),
+      state.rolesAssigned && el("p", { className: "hint", text: "Роли назначены на старте — на табло под номером (только тебе)." }),
+      el("label", { text: "Порядок отметок" }),
+      el("select", {
+        onChange: (e) => { state.orderMode = e.target.value; renderGame(); },
+      },
+        el("option", { value: "free", text: "Свободный", selected: state.orderMode === "free" }),
+        el("option", { value: "strict", text: "Строгий", selected: state.orderMode === "strict" })
+      ),
+      el("p", { className: "hint", text: "Можно сменить по ходу вечера." })
+    ));
+
+    right.append(el("div", { className: "card" },
+      el("h2", { text: "Журнал выбытий" }),
+      el("p", { className: "hint", text: "Для тебя и разбора после. Игрокам читай только нужное." }),
+      buildElimTable()
+    ));
+    right.append(el("div", { className: "card" },
+      el("h2", { text: "Лог" }),
+      el("div", { className: "log", text: state.log.slice(0, 40).join("\n") || "—" })
+    ));
+
+    root.append(el("div", { className: "grid2" }, left, right));
+    refreshActionList();
+  }
+
+  function buildActionComposer() {
+    const roles = [el("option", { value: "mafia", text: "Мафия" })];
+    if (state.hasDoctor) roles.push(el("option", { value: "doctor", text: "Доктор" }));
+    if (state.hasCop) roles.push(el("option", { value: "cop", text: "Комиссар" }));
+    const role = el("select", { id: "newRole" }, ...roles);
+    const target = el("select", { id: "newTarget" },
+      el("option", { value: "", text: "— комната —" }),
+      ...aliveRooms().map((r) => el("option", { value: String(r), text: `№${r}` }))
+    );
+    const actLabel = el("div", { id: "actAuto", text: ACTION_LABEL.mafia });
+    role.addEventListener("change", () => { actLabel.textContent = ACTION_LABEL[role.value]; });
+    return el("div", {},
+      el("div", { className: "row" },
+        el("div", {}, el("label", { text: "Роль" }), role, el("p", { className: "hint", text: "Кто действовал этой ночью." })),
+        el("div", {}, el("label", { text: "Комната" }), target, el("p", { className: "hint", text: "Только те, что ещё в игре." })),
+        el("div", {}, el("label", { text: "Смысл" }), actLabel, el("p", { className: "hint", text: "Подставляется сам." }))
+      ),
+      el("button", { className: "btn", text: "Добавить отметку", disabled: !!state.winner, onClick: addAction }),
+      el("p", { className: "hint", text: "Обычно: мафия + доктор + комиссар. Лишнее — «Удалить»." })
+    );
+  }
+
+  function refreshActionList() {
+    const box = document.getElementById("actList");
+    if (!box) return;
+    box.innerHTML = "";
+    if (!state.nightActions.length) {
+      box.append(el("p", { className: "hint", text: "Отметок этой ночи пока нет." }));
+      return;
+    }
+    state.nightActions.forEach((a, idx) => {
+      box.append(el("div", { className: "action-row" },
+        el("div", { text: ROLE_LABEL[a.role] }),
+        el("div", { text: `комната №${a.target}` }),
+        el("div", { text: ACTION_LABEL[a.role] }),
+        el("button", {
+          className: "btn btn-sm", text: "Удалить", disabled: !!state.winner,
+          onClick: () => {
+            state.nightActions.splice(idx, 1);
+            state.nightResolved = false;
+            state.nightResultText = "";
+            renderGame();
+          },
+        })
+      ));
+    });
+  }
+
+  function addAction() {
+    const err = document.getElementById("nightErr");
+    err.textContent = "";
+    const role = document.getElementById("newRole").value;
+    const target = parseInt(document.getElementById("newTarget").value, 10);
+    if (!role || !target) { err.textContent = "Выбери роль и комнату, потом «Добавить отметку»"; return; }
+    if (!state.alive.includes(target)) { err.textContent = `Комната №${target} уже вне игры`; return; }
+    if (role === "mafia") {
+      const other = state.nightActions.find((a) => a.role === "mafia" && a.target !== target);
+      if (other) { err.textContent = "У мафии одна общая цель за ночь"; return; }
+      state.nightActions = state.nightActions.filter((a) => a.role !== "mafia");
+    }
+    if (role === "doctor" || role === "cop") {
+      const prev = state.nightActions.find((a) => a.role === role);
+      state.nightActions = state.nightActions.filter((a) => a.role !== role);
+      if (prev) err.textContent = `${ROLE_LABEL[role]}: цель заменена.`;
+    }
+    state.nightActions.push({ role, target });
+    state.nightResolved = false;
+    state.nightResultText = "";
+    renderGame();
+  }
+
+  function resolveNight() {
+    const err = document.getElementById("nightErr");
+    err.textContent = "";
+    if (state.winner) return;
+    if (state.nightKillRoom != null) {
+      restoreAlive(state.nightKillRoom);
+      state.eliminations = state.eliminations.filter(
+        (e) => !(e.night === state.night && e.reason === "Выбыла ночью" && e.room === state.nightKillRoom)
+      );
+      if (state._lastNightWasMafia === true) state.mafiaAlive += 1;
+      state.nightKillRoom = null;
+      state._lastNightWasMafia = null;
+    }
+    const mAct = state.nightActions.find((a) => a.role === "mafia");
+    const dAct = state.nightActions.find((a) => a.role === "doctor");
+    const cAct = state.nightActions.find((a) => a.role === "cop");
+    log(`[Ночь ${state.night}] ` + (state.nightActions.map((a) => `${ROLE_LABEL[a.role]}→${a.target}`).join("; ") || "без отметок"));
+
+    let text = "";
+    let kill = null;
+    if (!mAct) {
+      text = "Мафия этой ночью никого не убрала (отметки нет).";
+      err.textContent = text;
+    } else if (state.hasDoctor && dAct && dAct.target === mAct.target) {
+      text = "Никто не выбыл — доктор успел к этой комнате.";
+    } else {
+      kill = mAct.target;
+      text = `Ночью выбыла комната №${kill}`;
+    }
+    if (cAct) text += (text ? " " : "") + `Комиссар проверял №${cAct.target}.`;
+
+    if (kill != null) {
+      if (!state.alive.includes(kill)) { err.textContent = `Комната №${kill} уже вне игры`; return; }
+      const wasMafia = resolveWasMafia(kill);
+      if (wasMafia === true) state.mafiaAlive = Math.max(0, state.mafiaAlive - 1);
+      state._lastNightWasMafia = wasMafia === true;
+      removeAlive(kill);
+      state.nightKillRoom = kill;
+      const note = [
+        dAct ? "доктор не на этой комнате" : "",
+        wasMafia === true ? "мафия" : wasMafia === false ? "мирный/роль" : "",
+        state.rolesAssigned && state.roles?.[kill] ? ROLE_SHORT[state.roles[kill]] : "",
+      ].filter(Boolean).join(", ");
+      pushElim(state.night, "Выбыла ночью", kill, note);
+      log(`[Ночь ${state.night}] Итог: выбыла №${kill}` + (note ? ` (${note})` : ""));
+    } else {
+      log(`[Ночь ${state.night}] Итог: ${text}`);
+    }
+    state.nightResultText = text;
+    state.nightResolved = true;
+    renderGame();
+  }
+
+  function askWasMafia(room) {
+    const a = confirm(`Комната №${room}: это была мафия?\n\nОК = Да\nОтмена = дальше`);
+    if (a) return true;
+    const b = confirm(`Отметить как мирных?\n\nОК = мирный\nОтмена = пропустить`);
+    if (b) return false;
+    log(`№${room}: роль не указана`);
+    return null;
+  }
+
+  function fixVote() {
+    const err = document.getElementById("voteErr");
+    err.textContent = "";
+    if (state.orderMode === "strict" && !state.nightResolved) {
+      err.textContent = "Сначала нажми «Посчитать ночь»"; return;
+    }
+    const room = parseInt(document.getElementById("voteRoom").value, 10);
+    if (!room) { err.textContent = "Выбери комнату"; return; }
+    if (!state.alive.includes(room)) { err.textContent = `Комната №${room} уже вне игры`; return; }
+    const wasMafia = resolveWasMafia(room);
+    if (wasMafia === true) state.mafiaAlive = Math.max(0, state.mafiaAlive - 1);
+    state.undoStack.push({ room, wasMafia });
+    removeAlive(room);
+    const note = wasMafia === true ? "мафия" : wasMafia === false ? (state.roles?.[room] ? ROLE_SHORT[state.roles[room]] : "мирный") : "";
+    pushElim(state.night, "Выгнали голосованием", room, note);
+    log(`[Сбор после ночи ${state.night}] Выгнали №${room}` + (note ? ` (${note})` : ""));
+    renderGame();
+  }
+
+  function undoElim() {
+    const last = state.undoStack.pop();
+    if (!last) { alert("Нечего отменять (только последнее голосование)."); return; }
+    restoreAlive(last.room);
+    if (last.wasMafia === true) state.mafiaAlive += 1;
+    const i = state.eliminations.findIndex((e) => e.reason === "Выгнали голосованием" && e.room === last.room);
+    if (i >= 0) state.eliminations.splice(i, 1);
+    state.winner = null;
+    log(`Отмена голосования: №${last.room}`);
+    renderGame();
+  }
+
+  function nextNight() {
+    if (!state.nightResolved) { alert("Сначала нажми «Посчитать ночь»"); return; }
+    if (state.winner) return;
+    log(`Ночь ${state.night} закрыта → Ночь ${state.night + 1}`);
+    state.night += 1;
+    state.nightActions = [];
+    state.nightResolved = false;
+    state.nightResultText = "";
+    state.nightKillRoom = null;
+    state._lastNightWasMafia = null;
+    renderGame();
+  }
+
+  function manualWin(who) {
+    state.winner = who;
+    log(who === "mafia" ? "Координатор: мафия победила" : "Координатор: мирные победили");
+    renderGame();
+  }
+
+  function buildElimTable() {
+    if (!state.eliminations.length) return el("p", { className: "hint", text: "Пока пусто." });
+    return el("table", {},
+      el("thead", {}, el("tr", {},
+        el("th", { text: "Ночь" }), el("th", { text: "Как" }),
+        el("th", { text: "Комната" }), el("th", { text: "Заметка" })
+      )),
+      el("tbody", {},
+        ...state.eliminations.map((e) => el("tr", {},
+          el("td", { text: String(e.night) }),
+          el("td", { text: e.reason }),
+          el("td", { text: e.room != null ? "№" + e.room : "—" }),
+          el("td", { text: e.comment || "" })
+        ))
+      )
+    );
+  }
+
+  function showBanner(who) {
+    const box = document.getElementById("banner");
+    box.classList.remove("hidden");
+    const title = who === "mafia" ? "Мафия победила" : "Мирные победили";
+    const nightKills = state.eliminations.filter((e) => e.reason === "Выбыла ночью").length;
+    const votes = state.eliminations.filter((e) => e.reason === "Выгнали голосованием").length;
+    box.innerHTML = "";
+    box.append(el("div", { className: "inner" },
+      el("h2", { text: title }),
+      el("p", { text: `Ночей: ${state.night}` }),
+      el("p", { text: `Выбыло ночью: ${nightKills}` }),
+      el("p", { text: `Выгнали голосованием: ${votes}` }),
+      el("p", { text: `Ещё в игре: ${aliveRooms().map((r) => "№" + r).join(", ") || "—"}` }),
+      el("div", { className: "toolbar", style: "justify-content:center" },
+        el("button", { className: "btn btn-accent", text: "Новый вечер", onClick: () => { state = null; box.classList.add("hidden"); renderStart(); } }),
+        el("button", { className: "btn", text: "Сохранить лог", onClick: saveLog }),
+        el("button", { className: "btn", text: "Закрыть", onClick: () => box.classList.add("hidden") })
+      )
+    ));
+  }
+
+  function saveGame() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `mafia-quest-night${state.night}.json`;
+    a.click(); URL.revokeObjectURL(a.href);
+  }
+  function saveLog() {
+    const blob = new Blob([state.log.join("\n")], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `mafia-quest-log.txt`;
+    a.click(); URL.revokeObjectURL(a.href);
+  }
+  function copyLog() {
+    const t = state.log.join("\n");
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(t).then(() => alert("Лог скопирован"));
+    else alert(t);
+  }
+  function loadFromFile() {
+    const inp = el("input", { type: "file", accept: ".json,application/json" });
+    inp.addEventListener("change", () => {
+      const f = inp.files?.[0]; if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (!data?.rooms || !data?.alive) throw new Error("bad");
+          state = data;
+          if (!state.undoStack) state.undoStack = [];
+          if (!state.log) state.log = [];
+          log("Вечер загружен из файла");
+          renderGame();
+        } catch (e) { alert("Файл сохранения не подошёл"); }
+      };
+      reader.readAsText(f);
+    });
+    inp.click();
+  }
+
+  renderStart();
+})();
+</script>
+</body>
+</html>
