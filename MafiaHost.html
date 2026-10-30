@@ -197,30 +197,58 @@
     return null;
   }
 
+  // По инструкции Спряток: при 2 игроках игра завершена.
+  function checkTwoLeft() {
+    if (state.alive.length > 2 || state.winner) return;
+    state.winner = "finished";
+    if (tracksMafia()) {
+      if (state.mafiaAlive <= 0) state.winner = "town";
+      else if (state.mafiaAlive >= state.alive.length - state.mafiaAlive) state.winner = "mafia";
+      else state.winner = "finished"; // двое живы, исход на усмотрение / смешанный
+    }
+    log(`Осталось 2 комнаты в игре — по правилам квеста партия завершается`);
+  }
+
   function computePhase() {
     if (state.winner === "mafia") return { key: "mafia", text: "Мафия победила" };
     if (state.winner === "town") return { key: "town", text: "Мирные победили" };
+    if (state.winner === "finished") return { key: "warn", text: "Игра завершена (осталось 2)" };
+    if (state.alive.length <= 2) {
+      return { key: "warn", text: "Игра завершена (осталось 2)" };
+    }
     if (tracksMafia()) {
       const m = state.mafiaAlive;
       const t = state.alive.length - m;
       if (m <= 0) return { key: "town", text: "Мирные победили" };
       if (m >= t) return { key: "mafia", text: "Мафия победила" };
-      const afterT = t - 1;
-      if (afterT >= 0 && (m >= afterT || (m === 1 && afterT === 1))) {
-        return { key: "warn", text: "Дальше — решающий момент" };
-      }
-      return { key: "play", text: "Вечер идёт" };
+      if (state.alive.length <= 3) return { key: "warn", text: "Дальше — решающий момент" };
+      return { key: "play", text: stageLabel() };
     }
-    if (state.alive.length <= 2 * state.mafiaStart + 1) {
-      return { key: "warn", text: "Дальше — решающий момент (оценка)" };
-    }
-    return { key: "play", text: "Вечер идёт" };
+    if (state.alive.length <= 3) return { key: "warn", text: "Дальше — решающий момент" };
+    return { key: "play", text: stageLabel() };
+  }
+
+  function stageLabel() {
+    const s = state.stage || "day";
+    if (s === "evening") return `Вечер ${state.night} · гуляют по комнатам (~3–4 мин)`;
+    if (s === "night") return `Ночь ${state.night} · маски, мафия/доктор`;
+    return `День ${state.night} · переговоры / голосование`;
   }
 
   function applyAutoWin(phase) {
+    if (state.alive.length <= 2) {
+      checkTwoLeft();
+      return;
+    }
     if (!tracksMafia()) return;
     if (phase.key === "mafia") state.winner = "mafia";
     if (phase.key === "town") state.winner = "town";
+  }
+
+  /** Подсказка состава по инструкции Спряток */
+  function suggestRoles(n) {
+    if (n <= 7) return { mafia: 1, doctor: true, cop: false, note: "6–7 чел.: мафия 1, доктор 1, остальные мирные" };
+    return { mafia: 2, doctor: true, cop: true, note: "8–10 чел.: мафия 1–2, доктор 1, комиссар 0–1, остальные мирные" };
   }
 
   /* ---- START ---- */
@@ -234,13 +262,14 @@
 
     const rooms = [1, 2, 3, 4, 5, 6];
     root.append(
-      el("div", { className: "callout", html: "<strong>Это пульт для координатора квеста.</strong> Люди играют вживую по комнатам. В программу заходишь только ты — зафиксировать ночь, голосование и не сбиться в счёте." }),
-      el("h2", { text: "Перед стартом вечера" }),
-      el("p", { className: "hint", text: "Заведи занятые комнаты на этаже. Пустые номера не вноси." })
+      el("div", { className: "callout", html: "<strong>Пульт координатора квеста «Мафия» (Спрятки).</strong> Игроки вживую: день в переговорной → вечер гуляют → ночь в комнатах. Ты только фиксируешь. Конец партии — когда осталось <strong>2</strong> игрока. Первое голосование можно пропустить." }),
+      el("h2", { text: "Перед стартом" }),
+      el("p", { className: "hint", text: "По инструкции: 6–10 человек, ~1,5 часа. Заведи занятые комнаты (пустые номера не вноси)." })
     );
 
     const err = el("div", { className: "err", id: "startErr" });
-    const players = el("input", { type: "number", min: "3", value: "6", id: "inpPlayers" });
+    const suggestHint = el("p", { className: "hint", id: "suggestHint" });
+    const players = el("input", { type: "number", min: "6", max: "10", value: "8", id: "inpPlayers" });
     const mafiaN = el("select", { id: "inpMafia" },
       el("option", { value: "1", text: "1 мафия" }),
       el("option", { value: "2", text: "2 мафии", selected: true })
@@ -347,6 +376,18 @@
       return roles;
     }
 
+    function applySuggest() {
+      const n = parseInt(players.value, 10) || 8;
+      const s = suggestRoles(n);
+      mafiaN.value = String(s.mafia);
+      chkDoc.checked = s.doctor;
+      chkCop.checked = s.cop;
+      suggestHint.textContent = "Подсказка по инструкции: " + s.note;
+      if (chkAssign.checked) rebuildAssign();
+    }
+    players.addEventListener("change", applySuggest);
+    players.addEventListener("input", applySuggest);
+
     chkAssign.addEventListener("change", rebuildAssign);
     chkDoc.addEventListener("change", () => { if (chkAssign.checked) rebuildAssign(); });
     chkCop.addEventListener("change", () => { if (chkAssign.checked) rebuildAssign(); });
@@ -355,9 +396,10 @@
     mafiaN.addEventListener("change", () => { if (chkAssign.checked) rebuildAssign(); });
 
     root.append(
-      el("label", { text: "Сколько человек в прогоне (ориентир)" }),
+      el("label", { text: "Сколько человек (6–10)" }),
       players,
-      el("p", { className: "hint", text: "Для себя. Главное — список занятых комнат ниже." }),
+      suggestHint,
+      el("p", { className: "hint", text: "Меняешь число — подставляются типичные роли. Комнаты всё равно задаёшь сам." }),
       el("label", { text: "Занятые комнаты на площадке" }),
       roomsBox,
       el("button", {
@@ -394,9 +436,11 @@
       const p = parseInt(players.value, 10);
       const roomsList = readRooms();
       const m = parseInt(mafiaN.value, 10);
-      if (!p || p < 3) { err.textContent = "Слишком мало человек (минимум 3)"; return; }
+      if (!p || p < 6) { err.textContent = "По инструкции минимум 6 человек"; return; }
+      if (p > 10) { err.textContent = "По инструкции максимум 10 человек"; return; }
       if (!roomsList.length) { err.textContent = "Добавь хотя бы одну занятую комнату"; return; }
       if (roomsList.length < p) { err.textContent = "Комнат меньше, чем людей — добавь занятые номера"; return; }
+      if (roomsList.length > 10) { err.textContent = "Больше 10 комнат — проверь список"; return; }
       const uniq = new Set(roomsList);
       if (uniq.size !== roomsList.length) {
         const dup = roomsList.find((r, i) => roomsList.indexOf(r) !== i);
@@ -440,6 +484,8 @@
         askMafiaOnElim: chkAsk.checked,
         orderMode: orderSel.value,
         night: 1,
+        stage: "day", // day | evening | night — сутки квеста
+        votesDone: 0, // сколько голосований уже провели (0 = ещё можно пропустить)
         nightActions: [],
         nightResolved: false,
         nightResultText: "",
@@ -452,9 +498,10 @@
       const roleLog = roles
         ? Object.entries(roles).map(([r, v]) => `№${r}=${v}`).join(", ")
         : "роли не назначали";
-      log(`[Старт вечера] комнат=${state.rooms.join(",")} мафий=${m} ${roleLog}`);
+      log(`[Старт] комнат=${state.rooms.join(",")} мафий=${m} ${roleLog}`);
       renderGame();
     }
+    applySuggest();
   }
 
   /* ---- GAME ---- */
@@ -481,27 +528,49 @@
     const left = el("div");
     const right = el("div");
 
-    // Room board
+    // Room board + stage
     left.append(el("div", { className: "card" },
-      el("h2", { text: `Ночь ${state.night} · табло комнат` }),
-      el("p", { className: "hint", text: "Зелёная рамка — ещё в игре. Зачёркнутая — выбыла. Это карта площадки для тебя." }),
+      el("h2", { text: "Табло комнат" }),
+      el("p", { className: "hint", text: "Зелёная рамка — в игре (ещё не привидение). Зачёркнутая — выбыла. При 2 оставшихся — конец по правилам квеста." }),
       el("div", { className: "board" },
         ...state.rooms.map((r) => {
           const alive = state.alive.includes(r);
           const role = state.rolesAssigned && state.roles ? state.roles[r] : null;
           return el("div", { className: "tile " + (alive ? "alive" : "out") },
             el("strong", { text: "№" + r }),
-            el("small", { text: alive ? "в игре" : "вне игры" }),
+            el("small", { text: alive ? "в игре" : "привидение" }),
             role ? el("small", { text: ROLE_SHORT[role] || role, style: role === "mafia" ? "color:#e86a5a" : "" }) : null
           );
+        })
+      ),
+      el("h2", { text: "Сейчас на площадке" }),
+      el("p", { className: "hint", text: "День (переговоры) → Вечер (~3–4 мин гуляют) → Ночь (маски, доктор/мафия) → Утро/день." }),
+      el("div", { className: "toolbar" },
+        el("button", {
+          className: "btn btn-sm" + (state.stage === "day" ? " btn-accent" : ""),
+          text: "День",
+          disabled: !!state.winner,
+          onClick: () => { state.stage = "day"; log(`Объявлен день ${state.night}`); renderGame(); },
+        }),
+        el("button", {
+          className: "btn btn-sm" + (state.stage === "evening" ? " btn-accent" : ""),
+          text: "Вечер",
+          disabled: !!state.winner,
+          onClick: () => { state.stage = "evening"; log(`Объявлен вечер ${state.night} (~3–4 мин)`); renderGame(); },
+        }),
+        el("button", {
+          className: "btn btn-sm" + (state.stage === "night" ? " btn-accent" : ""),
+          text: "Ночь",
+          disabled: !!state.winner,
+          onClick: () => { state.stage = "night"; log(`Объявлена ночь ${state.night}`); renderGame(); },
         })
       )
     ));
 
     // Night notes
     left.append(el("div", { className: "card" },
-      el("h2", { text: "Что произошло ночью (вживую)" }),
-      el("p", { className: "hint", text: "Ночь уже отыграли на этаже. Ты только фиксируешь факт: кого били / лечили / проверяли." }),
+      el("h2", { text: `Ночь ${state.night} — отметки (доктор / мафия / комиссар)` }),
+      el("p", { className: "hint", text: "Игрок подходит к тебе в стаф и называет комнату. На пульте ошейников: звук = доктор вылечил, вибрация = мафия. Сюда вносишь факт." }),
       buildActionComposer(),
       el("div", { className: "actions-list", id: "actList" }),
       el("div", { className: "result-box", id: "nightResult", text: state.nightResultText || "После «Посчитать ночь» здесь текст, который можно озвучить." }),
@@ -513,16 +582,17 @@
       el("p", { className: "hint", text: "«Посчитать» — кто выбыл ночью. «Следующая» — только после подсчёта, сброс действий, Ночь+1." })
     ));
 
-    const voteDisabled = state.orderMode === "strict" && !state.nightResolved;
+    const voteDisabled = (state.orderMode === "strict" && !state.nightResolved) || !!state.winner;
+    const canSkipVote = state.votesDone === 0 && !state.winner;
     left.append(el("div", { className: "card" },
-      el("h2", { text: "Общий сбор · голосование" }),
-      el("p", { className: "hint", text: voteDisabled
-        ? "Строгий режим: сначала «Посчитать ночь», или переключи порядок справа на «Свободный»."
-        : "Голосование прошло вживую — отметь комнату, которую выгнали. Она пропадёт с табло." }),
+      el("h2", { text: "День · голосование в переговорной" }),
+      el("p", { className: "hint", text: voteDisabled && state.orderMode === "strict" && !state.nightResolved
+        ? "Строгий режим: сначала «Посчитать ночь»."
+        : "По инструкции: 1-й день можно воздержаться. Со 2-го голосования кого-то выбрать обязательно. Выгнанный → привидение (накидка), карту роли не раскрывает." }),
       el("div", { className: "row" },
         el("div", {},
-          el("label", { text: "Выгнали комнату" }),
-          el("select", { id: "voteRoom", disabled: voteDisabled || !!state.winner },
+          el("label", { text: "Выгнали (комната / игрок)" }),
+          el("select", { id: "voteRoom", disabled: voteDisabled },
             el("option", { value: "", text: "— номер —" }),
             ...aliveRooms().map((r) => el("option", { value: String(r), text: `№${r}` }))
           )
@@ -530,15 +600,21 @@
         el("div", {},
           el("label", { text: "\u00a0" }),
           el("button", {
-            className: "btn btn-warn", text: "Отметить выбытие",
-            disabled: voteDisabled || !!state.winner, onClick: fixVote,
+            className: "btn btn-warn", text: "Отметить казнь / выбытие",
+            disabled: voteDisabled, onClick: fixVote,
           })
         )
       ),
       el("div", { className: "toolbar" },
+        canSkipVote && el("button", {
+          className: "btn btn-sm",
+          text: "Пропустить голосование (только 1-й день)",
+          onClick: skipFirstVote,
+        }),
         el("button", { className: "btn btn-sm", text: "Отменить последнее голосование", onClick: undoElim }),
         !tracksMafia() && el("button", { className: "btn btn-sm btn-ok", text: "Мирные победили", onClick: () => manualWin("town") }),
-        !tracksMafia() && el("button", { className: "btn btn-sm btn-bad", text: "Мафия победила", onClick: () => manualWin("mafia") })
+        !tracksMafia() && el("button", { className: "btn btn-sm btn-bad", text: "Мафия победила", onClick: () => manualWin("mafia") }),
+        el("button", { className: "btn btn-sm btn-warn", text: "Завершить (осталось 2)", onClick: () => { checkTwoLeft(); renderGame(); } })
       ),
       el("div", { className: "err", id: "voteErr" })
     ));
@@ -694,11 +770,13 @@
       ].filter(Boolean).join(", ");
       pushElim(state.night, "Выбыла ночью", kill, note);
       log(`[Ночь ${state.night}] Итог: выбыла №${kill}` + (note ? ` (${note})` : ""));
+      checkTwoLeft();
     } else {
       log(`[Ночь ${state.night}] Итог: ${text}`);
     }
     state.nightResultText = text;
     state.nightResolved = true;
+    state.stage = "day"; // утро / переговоры
     renderGame();
   }
 
@@ -722,11 +800,28 @@
     if (!state.alive.includes(room)) { err.textContent = `Комната №${room} уже вне игры`; return; }
     const wasMafia = resolveWasMafia(room);
     if (wasMafia === true) state.mafiaAlive = Math.max(0, state.mafiaAlive - 1);
-    state.undoStack.push({ room, wasMafia });
+    if (state.votesDone >= 1) {
+      // ok mandatory
+    }
+    state.undoStack.push({ room, wasMafia, kind: "vote" });
     removeAlive(room);
+    state.votesDone += 1;
     const note = wasMafia === true ? "мафия" : wasMafia === false ? (state.roles?.[room] ? ROLE_SHORT[state.roles[room]] : "мирный") : "";
     pushElim(state.night, "Выгнали голосованием", room, note);
-    log(`[Сбор после ночи ${state.night}] Выгнали №${room}` + (note ? ` (${note})` : ""));
+    log(`[День] Выгнали №${room} → привидение` + (note ? ` (${note})` : ""));
+    checkTwoLeft();
+    state.stage = "evening";
+    renderGame();
+  }
+
+  function skipFirstVote() {
+    if (state.votesDone !== 0) {
+      alert("Пропуск только для первого голосования. Дальше кого-то выбрать обязательно.");
+      return;
+    }
+    state.votesDone = 1; // считаем, что «день без жертвы» закрыт
+    log(`[День 1] Голосование пропущено (воздержались)`);
+    state.stage = "evening";
     renderGame();
   }
 
@@ -737,6 +832,7 @@
     if (last.wasMafia === true) state.mafiaAlive += 1;
     const i = state.eliminations.findIndex((e) => e.reason === "Выгнали голосованием" && e.room === last.room);
     if (i >= 0) state.eliminations.splice(i, 1);
+    if (state.votesDone > 0) state.votesDone -= 1;
     state.winner = null;
     log(`Отмена голосования: №${last.room}`);
     renderGame();
@@ -745,8 +841,11 @@
   function nextNight() {
     if (!state.nightResolved) { alert("Сначала нажми «Посчитать ночь»"); return; }
     if (state.winner) return;
-    log(`Ночь ${state.night} закрыта → Ночь ${state.night + 1}`);
+    checkTwoLeft();
+    if (state.winner) { renderGame(); return; }
+    log(`Ночь ${state.night} закрыта → утро / день ${state.night + 1}`);
     state.night += 1;
+    state.stage = "day";
     state.nightActions = [];
     state.nightResolved = false;
     state.nightResultText = "";
@@ -782,18 +881,21 @@
   function showBanner(who) {
     const box = document.getElementById("banner");
     box.classList.remove("hidden");
-    const title = who === "mafia" ? "Мафия победила" : "Мирные победили";
+    const title = who === "mafia" ? "Мафия победила"
+      : who === "town" ? "Мирные победили"
+      : "Игра завершена (осталось 2)";
     const nightKills = state.eliminations.filter((e) => e.reason === "Выбыла ночью").length;
     const votes = state.eliminations.filter((e) => e.reason === "Выгнали голосованием").length;
     box.innerHTML = "";
     box.append(el("div", { className: "inner" },
       el("h2", { text: title }),
-      el("p", { text: `Ночей: ${state.night}` }),
+      el("p", { text: `Кругов (ночей): ${state.night}` }),
       el("p", { text: `Выбыло ночью: ${nightKills}` }),
       el("p", { text: `Выгнали голосованием: ${votes}` }),
-      el("p", { text: `Ещё в игре: ${aliveRooms().map((r) => "№" + r).join(", ") || "—"}` }),
+      el("p", { text: `Остались: ${aliveRooms().map((r) => "№" + r).join(", ") || "—"}` }),
+      who === "finished" && el("p", { className: "hint", text: "По инструкции при 2 игроках квест завершён. Исход можешь озвучить сам." }),
       el("div", { className: "toolbar", style: "justify-content:center" },
-        el("button", { className: "btn btn-accent", text: "Новый вечер", onClick: () => { state = null; box.classList.add("hidden"); renderStart(); } }),
+        el("button", { className: "btn btn-accent", text: "Новый прогон", onClick: () => { state = null; box.classList.add("hidden"); renderStart(); } }),
         el("button", { className: "btn", text: "Сохранить лог", onClick: saveLog }),
         el("button", { className: "btn", text: "Закрыть", onClick: () => box.classList.add("hidden") })
       )
@@ -831,6 +933,8 @@
           state = data;
           if (!state.undoStack) state.undoStack = [];
           if (!state.log) state.log = [];
+          if (!state.stage) state.stage = "day";
+          if (state.votesDone == null) state.votesDone = 0;
           log("Вечер загружен из файла");
           renderGame();
         } catch (e) { alert("Файл сохранения не подошёл"); }
